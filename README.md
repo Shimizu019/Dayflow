@@ -1,124 +1,178 @@
 # Dayflow
 
-**Your day, organized.**
+**An Offline-First Personal Management Android Application**
 
-Dayflow is an offline-first personal management application designed to help users organize their daily activities and manage their personal finances in one place.
+Dayflow is a personal management application designed to help users organize their daily activities, manage finances, track savings, and stay productive. It prioritizes offline functionality, local data storage, privacy, and a simple user experience.
 
-It brings together expense tracking, savings goals, tasks, and scheduling through a centralized dashboard. The application is designed to remain usable without an internet connection, with online functionality supporting data synchronization when connectivity is available.
+## 1. Project Overview
 
-## Project Overview
+Dayflow is designed to work without requiring:
+- An internet connection.
+- User registration or online accounts.
+- A backend server.
+- Cloud databases or synchronization.
 
-Dayflow aims to provide a simple and convenient way to manage everyday responsibilities and personal finances without depending on a constant internet connection.
+All personal information is stored locally on the user's Android device.
 
-Instead of using multiple applications for different activities, users can manage their daily records and goals within one application.
+## 2. Technology Stack
 
-## Core Features
+### Frontend and UI
 
-### 1. Dashboard
-A centralized overview of the user's personal activities and financial records.
+| Technology | Purpose |
+|---|---|
+| React 19 | Application UI development |
+| TypeScript | Type safety and maintainable code |
+| Vite | Development server and build tool |
+| Tailwind CSS 4 | Responsive UI styling |
+| Lucide React | Icon library |
+| React Router | Application navigation |
+| Recharts | Charts and data visualization |
 
-- Display an overview of recent activities.
-- Show recently added records from different modules.
-- Provide quick access to the main features.
-- Present relevant summaries of personal information.
+### State Management
 
-### 2. My Wallet
-A personal expense-tracking feature for recording and monitoring daily spending.
+| Technology | Purpose |
+|---|---|
+| Zustand 5 | Global application state management |
+| Zustand Persist Middleware | Persistence of selected non-sensitive preferences |
 
-- Record daily expenses.
-- Organize expense records.
-- View transaction history.
-- Monitor daily spending.
+Planned Zustand stores:
+- `useAppStore` — General application state.
+- `useAuthStore` — Authentication and lock status.
+- `useWalletStore` — Wallet-related state.
+- `useSavingsStore` — Savings-related state.
+- `useTasksStore` — Task-related state.
+- `useScheduleStore` — Schedule-related state.
 
-### 3. Savings
-A savings goal management feature that helps users save money for specific purchases or personal goals.
+SQLite remains the source of truth for persistent application records. Zustand is not the primary database.
 
-- Create savings goals.
-- Set target amounts.
-- Record savings contributions.
-- Track savings progress.
-- Monitor completed and ongoing goals.
+### Android Development
 
-### 4. Tasks
-A personal task management feature for organizing everyday responsibilities and activities.
+| Technology | Purpose |
+|---|---|
+| Capacitor | Package the React application as an Android app |
+| Capacitor Android | Native Android integration |
+| Android Studio | Android development, emulator, and debugging |
+| Gradle | Android build system |
 
-- Create and manage tasks.
-- Record daily activities.
-- Manage academic and personal responsibilities.
-- Track task completion.
+### Local Database and Storage
 
-### 5. Schedule
-A scheduling feature for organizing classes, events, and other planned activities.
+| Technology | Purpose |
+|---|---|
+| SQLite | Primary local database |
+| Capacitor SQLite Plugin | SQLite integration with the Android application |
+| SQL | Database queries and management |
+| Capacitor Preferences | Lightweight application settings |
 
-- Add scheduled activities.
-- Organize class schedules.
-- View upcoming events.
-- Manage daily schedules.
+### Security and Authentication
 
-## Offline and Online Functionality
+| Technology | Purpose |
+|---|---|
+| Argon2id | Password-based key derivation |
+| Android Keystore | Protection of encryption keys |
+| AES-256-GCM | Encryption and integrity protection |
+| Local Authentication Service | Password setup, verification, locking, and password changes |
 
-One of Dayflow's primary objectives is to support both offline and online usage.
+Security requirements:
+- First launch requires the user to create a password.
+- Subsequent launches require the password to unlock Dayflow.
+- Password input must be masked.
+- Changing the password requires verification of the current password.
+- Actual passwords must never be stored.
+- The application must start in a locked state after a fresh launch.
+- Sensitive information must be encrypted at rest.
+- A recovery-key mechanism must be designed for forgotten passwords.
 
-**Offline Mode**
-- Access available application features without an internet connection.
-- Create and manage records while offline.
-- Keep locally stored information accessible.
+### Development Tools
 
-**Online Mode**
-- Use the application when an internet connection is available.
-- Support data synchronization between local storage and the online data source.
-- Maintain data consistency across offline and online usage.
+| Tool | Purpose |
+|---|---|
+| Visual Studio Code | Main code editor |
+| Android Studio | Android emulator and debugging |
+| Git | Version control |
+| GitHub | Source-code repository |
+| Chrome DevTools | Frontend debugging |
+| Cline / Cursor | AI-assisted development |
 
-The synchronization architecture and conflict-resolution rules will be defined during the system design phase.
+## 3. Core Application Features
 
-## Project Goals
+The planned application includes:
 
-- Provide a centralized personal management application.
-- Make daily expense tracking easier.
-- Help users establish and monitor savings goals.
-- Improve daily task and schedule organization.
-- Maintain usability even without internet access.
-- Support reliable synchronization between offline and online data.
+| Feature | Description |
+|---|---|
+| Dashboard | Overview of personal activities and important information |
+| My Wallet | Manage wallet balances and daily expenses |
+| Savings | Create and monitor savings goals |
+| Tasks | Organize and track daily tasks |
+| Schedule | Manage personal schedules and activities |
+| Local Password Lock | Protect access to the application |
+| Settings | Manage application preferences and security settings |
 
-## Development Status
+## 4. Application Architecture
 
-**Current Phase:** Project Foundation and Planning
-
-The project is currently being established. System requirements, technology selection, application architecture, database design, user interface specifications, and offline synchronization behavior will be documented before implementation.
-
-## Planned Project Structure
-
-The following structure represents the initial documentation organization. The actual application structure will be established after the technology stack is selected.
+The application follows a local-first architecture.
 
 ```text
-dayflow/
+Dayflow
 │
-├── README.md
+├── Frontend
+│   ├── React 19
+│   ├── TypeScript
+│   ├── Tailwind CSS 4
+│   ├── React Router
+│   ├── Lucide React
+│   └── Recharts
 │
-└── docs/
-    ├── PROJECT-OVERVIEW.md
-    ├── SYSTEM-REQUIREMENTS.md
-    ├── SYSTEM-ARCHITECTURE.md
-    ├── DATABASE-DESIGN.md
-    ├── UI-UX-SPECIFICATION.md
-    ├── OFFLINE-SYNC-DESIGN.md
-    └── DEVELOPMENT-ROADMAP.md
+├── State Management
+│   └── Zustand 5
+│
+├── Android Integration
+│   └── Capacitor
+│
+├── Local Database
+│   └── SQLite
+│
+└── Security Layer
+    ├── Argon2id
+    ├── Android Keystore
+    └── AES-256-GCM
 ```
 
-## Technology Stack
+## 5. Project Requirements
 
-**Status:** To be determined.
+- Android application.
+- Responsive interface supporting different Android screen sizes.
+- Offline-first functionality.
+- Local database storage.
+- Local password authentication.
+- Encrypted sensitive information.
+- No backend server.
+- No online account registration.
+- No mandatory internet connection.
+- No cloud synchronization.
 
-The programming languages, frameworks, database technologies, and development tools will be selected during the project planning phase.
+## 6. Important Architectural Decisions
 
-## Future Development
+1. React and Tailwind CSS will remain the frontend foundation.
+2. Capacitor will package the existing React application for Android.
+3. Zustand 5 will manage application state.
+4. SQLite will handle persistent application data.
+5. The security layer will operate separately from Zustand.
+6. Passwords and encryption keys must never be stored as ordinary application state.
+7. Core application features must remain functional without internet access.
+8. The application must not depend on external servers to access locally stored information.
 
-Dayflow may expand with additional personal management features as the project develops. Future additions will be evaluated based on their usefulness, compatibility, and alignment with the application's offline-first approach.
+## 7. Development Status
 
-## License
+**Current phase:** Technology Stack and Architecture Planning
 
-No license has been selected yet.
+The current React and Tailwind CSS implementation serves as the proof of concept. The production Android application will build upon this foundation by integrating Capacitor, SQLite, and the security architecture.
 
 ---
 
-**Dayflow — Your day, organized.**
+**Project Name:** Dayflow  
+**Platform:** Android  
+**Architecture:** Offline-First / Local-First  
+**Backend:** None  
+**Database:** SQLite  
+**State Management:** Zustand 5  
+**Frontend:** React + TypeScript + Tailwind CSS
