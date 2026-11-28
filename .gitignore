@@ -6,9 +6,23 @@ dist/
 build/
 *.local
 
-# Capacitor
-android/
+# Capacitor native platforms (ignore build outputs and local config only)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/local.properties
+android/key.properties
 ios/
+
+# Android signing keys — never commit keystores or key properties
+*.jks
+*.keystore
+*.bks
+*.p12
 
 # Environment files
 .env

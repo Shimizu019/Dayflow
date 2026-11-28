@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { validateAmount } from '@/utils/format';
-import { initializeSQLite, isSQLiteReady } from '@/database/connection';
+import { initializeSQLite } from '@/database/connection';
+import { initializeDatabase } from '@/database/initializeDatabase';
 import {
   getAllExpenses, createExpense, updateExpense, deleteExpense,
 } from '@/database/repositories/expenseRepository';
@@ -143,6 +144,7 @@ interface DayflowState {
 }
 
 let isDbReady = false;
+let dbLoadPromise: Promise<void> | null = null;
 
 export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
   expenses: [],
@@ -193,73 +195,80 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
 
   loadFromDatabase: async () => {
     if (isDbReady) return;
-    try {
-      const ready = await isSQLiteReady();
-      if (!ready) {
+    if (dbLoadPromise) return dbLoadPromise;
+
+    dbLoadPromise = (async () => {
+      try {
         await initializeSQLite();
+        await initializeDatabase();
+
+        const [expenses, savings, tasks, events] = await Promise.all([
+          getAllExpenses(),
+          getAllSavingsGoals(),
+          getAllTasks(),
+          getAllScheduleActivities(),
+        ]);
+
+        const expenseItems: Expense[] = expenses.map((e) => ({
+          id: e.id,
+          title: e.title,
+          amountCentavos: e.amount,
+          category: e.category as 'Food & Drinks' | 'Transport' | 'Others',
+          date: e.date,
+          createdAt: e.created_at,
+        }));
+
+        const goalItems: SavingsGoal[] = savings.map((g) => ({
+          id: g.id,
+          title: g.name,
+          currentCentavos: g.current_amount,
+          targetCentavos: g.target_amount,
+          createdAt: g.created_at,
+        }));
+
+        const taskItems: TaskItem[] = tasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          dueDate: t.due_date ?? '',
+          dueTime: t.due_time,
+          priority: t.priority,
+          completed: Boolean(t.completed),
+          createdAt: t.created_at,
+        }));
+
+        const eventItems: ScheduleEvent[] = events.map((ev) => ({
+          id: ev.id,
+          title: ev.title,
+          date: ev.date,
+          time: ev.start_time ?? '',
+          location: ev.end_time ?? '',
+          createdAt: ev.created_at,
+        }));
+
+        const totalExpenses = expenseItems.reduce((sum, e) => sum + e.amountCentavos, 0);
+        const totalSavings = goalItems.reduce((sum, g) => sum + g.currentCentavos, 0);
+        const completedTasks = taskItems.filter((t) => t.completed).length;
+
+        set({
+          expenses: expenseItems,
+          savingsGoals: goalItems,
+          tasks: taskItems,
+          scheduleEvents: eventItems,
+          totalExpenses,
+          totalSavings,
+          completedTasks,
+        });
+        isDbReady = true;
+      } catch (error) {
+        console.error('Failed to load from database:', error);
+        throw error;
+      } finally {
+        dbLoadPromise = null;
       }
-      isDbReady = true;
+    })();
 
-      const [expenses, savings, tasks, events] = await Promise.all([
-        getAllExpenses(),
-        getAllSavingsGoals(),
-        getAllTasks(),
-        getAllScheduleActivities(),
-      ]);
-
-      const expenseItems: Expense[] = expenses.map((e) => ({
-        id: e.id,
-        title: e.title,
-        amountCentavos: e.amount,
-        category: e.category as 'Food & Drinks' | 'Transport' | 'Others',
-        date: e.date,
-        createdAt: e.created_at,
-      }));
-
-      const goalItems: SavingsGoal[] = savings.map((g) => ({
-        id: g.id,
-        title: g.name,
-        currentCentavos: g.current_amount,
-        targetCentavos: g.target_amount,
-        createdAt: g.created_at,
-      }));
-
-      const taskItems: TaskItem[] = tasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        description: t.description,
-        dueDate: t.due_date ?? '',
-        dueTime: t.due_time,
-        priority: t.priority,
-        completed: Boolean(t.completed),
-        createdAt: t.created_at,
-      }));
-
-      const eventItems: ScheduleEvent[] = events.map((ev) => ({
-        id: ev.id,
-        title: ev.title,
-        date: ev.date,
-        time: ev.start_time ?? '',
-        location: ev.end_time ?? '',
-        createdAt: ev.created_at,
-      }));
-
-      const totalExpenses = expenseItems.reduce((sum, e) => sum + e.amountCentavos, 0);
-      const totalSavings = goalItems.reduce((sum, g) => sum + g.currentCentavos, 0);
-      const completedTasks = taskItems.filter((t) => t.completed).length;
-
-      set({
-        expenses: expenseItems,
-        savingsGoals: goalItems,
-        tasks: taskItems,
-        scheduleEvents: eventItems,
-        totalExpenses,
-        totalSavings,
-        completedTasks,
-      });
-    } catch (error) {
-      console.error('Failed to load from database:', error);
-    }
+    return dbLoadPromise;
   },
 
   // Expenses
@@ -351,6 +360,7 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
   addSavingsGoal: async (title, currentPesos, targetPesos) => {
     if (!title.trim() || targetPesos <= 0) return;
     try {
+      await get().loadFromDatabase();
       const created = await createSavingsGoal({
         name: title.trim(),
         target_amount: Math.round(targetPesos * 100),

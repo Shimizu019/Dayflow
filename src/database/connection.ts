@@ -35,8 +35,30 @@ export async function isSQLiteReady(): Promise<boolean> {
 
 export async function executeQuery(options: { query: string; params?: any[] }): Promise<any> {
   try {
-    const result = await CapacitorSQLite.run({ database: dbName, statement: options.query, values: options.params ?? [] });
-    return result as any;
+    const statement = options.query.trim();
+    const isReadQuery = /^(SELECT|WITH|EXPLAIN)\b/i.test(statement)
+      || (/^PRAGMA\b/i.test(statement) && !/\s=/.test(statement));
+
+    if (isReadQuery) {
+      const result = await CapacitorSQLite.query({
+        database: dbName,
+        statement,
+        values: options.params ?? [],
+      });
+      return { results: result.values ?? [] };
+    }
+
+    const result = await CapacitorSQLite.run({
+      database: dbName,
+      statement,
+      values: options.params ?? [],
+    });
+    const changes = result.changes;
+    return {
+      results: changes?.values ?? [],
+      changes: changes?.changes ?? 0,
+      lastId: changes?.lastId,
+    };
   } catch (error) {
     console.error("SQLite query error:", error);
     throw error;
