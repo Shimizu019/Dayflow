@@ -3,7 +3,7 @@ import { Task } from "../models";
 
 export async function getAllTasks(): Promise<Task[]> {
   const result: any = await executeQuery({
-    query: "SELECT id, title, description, due_date, priority, completed, created_at, updated_at FROM tasks ORDER BY priority DESC, due_date ASC",
+    query: "SELECT id, title, description, due_date, due_time, priority, completed, created_at, updated_at FROM tasks ORDER BY priority DESC, due_date ASC, due_time ASC",
     params: [],
   });
   const r = result?.results;
@@ -12,7 +12,7 @@ export async function getAllTasks(): Promise<Task[]> {
 
 export async function getTaskById(id: number): Promise<Task | undefined> {
   const result: any = await executeQuery({
-    query: "SELECT id, title, description, due_date, priority, completed, created_at, updated_at FROM tasks WHERE id = ?",
+    query: "SELECT id, title, description, due_date, due_time, priority, completed, created_at, updated_at FROM tasks WHERE id = ?",
     params: [id],
   });
   const r = result?.results;
@@ -22,11 +22,11 @@ export async function getTaskById(id: number): Promise<Task | undefined> {
 
 export async function createTask(task: Omit<Task, "id" | "created_at" | "updated_at">): Promise<Task> {
   const result: any = await executeQuery({
-    query: "INSERT INTO tasks (title, description, due_date, priority, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING *",
-    params: [task.title, task.description, task.due_date, task.priority, task.completed],
+    query: "INSERT INTO tasks (title, description, due_date, due_time, priority, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING *",
+    params: [task.title, task.description, task.due_date, task.due_time, task.priority, task.completed],
   });
   const r = result?.results;
-  return r ? (r[0] as Task) : { id: 0, title: "", description: "", due_date: "", priority: "Medium", completed: false, created_at: "", updated_at: "" } as Task;
+  return r ? (r[0] as Task) : { id: 0, title: "", description: "", due_date: "", due_time: "", priority: "Medium", completed: false, created_at: "", updated_at: "" } as Task;
 };
 
 export async function updateTask(id: number, updates: Partial<Task>): Promise<boolean> {
@@ -36,6 +36,7 @@ export async function updateTask(id: number, updates: Partial<Task>): Promise<bo
   if (updates.title !== undefined) { sets.push("title = ?"); params.push(updates.title); }
   if (updates.description !== undefined) { sets.push("description = ?"); params.push(updates.description); }
   if (updates.due_date !== undefined) { sets.push("due_date = ?"); params.push(updates.due_date); }
+  if (updates.due_time !== undefined) { sets.push("due_time = ?"); params.push(updates.due_time); }
   if (updates.priority !== undefined) { sets.push("priority = ?"); params.push(updates.priority); }
   if (updates.completed !== undefined) { sets.push("completed = ?"); params.push(updates.completed); }
 
