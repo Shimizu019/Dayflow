@@ -89,7 +89,7 @@ export default function ProfileScreen() {
 
       <div className="pt-4">
         <div className="text-center text-[11px] font-medium text-ink-400 mt-4">
-          Dayflow v1.0.0
+          Dayflow v1.0.2
         </div>
       </div>
     </div>

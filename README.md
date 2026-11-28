@@ -6,10 +6,10 @@ DayFlow brings daily planning, expense tracking, savings goals, and personal sch
 
 ## Release status
 
-**Dayflow v1.0.1 — Early Access** (GitHub pre-release, tag `v1.0.1`)
+**Dayflow v1.0.2 — Early Access** (GitHub pre-release, tag `v1.0.2`)
 
 - Status: **Early Access** — not yet fully verified on Android devices; user feedback is needed.
-- Version consistency: `package.json` `1.0.1`; `package-lock.json` `1.0.1`; Android `versionName` `1.0.1`; Android `versionCode` `2`; Application ID `com.dayflow.app`.
+- Version consistency: `package.json` `1.0.2`; `package-lock.json` `1.0.2`; Android `versionName` `1.0.2`; Android `versionCode` `3`; Application ID `com.dayflow.app`.
 - Release type: GitHub Pre-release.
 
 ## Product scope
@@ -103,7 +103,7 @@ Capacitor 8 dependencies are installed and an `android/` native project is now p
 
 ## Installation — Android
 
-1. Download the APK from the releases page (v1.0.1).
+1. Download the APK from the releases page (v1.0.2).
 2. Enable "Install from unknown sources" in Android settings.
 3. Install the APK and launch Dayflow.
 4. Minimum Android version: **Android 7.0 (API 24)** / `compileSdkVersion` 36.
@@ -121,10 +121,10 @@ Capacitor 8 dependencies are installed and an `android/` native project is now p
 
 | Field | Value |
 |---|---|
-| `package.json` version | `1.0.1` |
-| `package-lock.json` version | `1.0.1` |
-| Android `versionName` | `"1.0.1"` |
-| Android `versionCode` | `2` |
+| `package.json` version | `1.0.2` |
+| `package-lock.json` version | `1.0.2` |
+| Android `versionName` | `"1.0.2"` |
+| Android `versionCode` | `3` |
 | Application ID | `com.dayflow.app` (unchanged) |
 
 ## Signing configuration
