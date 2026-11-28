@@ -23,6 +23,7 @@ export interface Task {
   title: string;
   description?: string;
   due_date?: string; // YYYY-MM-DD format
+  due_time?: string; // HH:MM format
   priority: "High" | "Medium" | "Low";
   completed: boolean;
   created_at: string;
