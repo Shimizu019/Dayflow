@@ -11,6 +11,14 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+  --app-background: #F8F7FC;
+  --surface-background: #FFFFFF;
+  --app-text: #191627;
+  --app-muted: #7B768F;
+  --app-border: #ECE8FA;
+  --app-soft-surface: #F4F1FE;
+  --app-soft-border: #EAE4FC;
   --font-sans: '"Plus Jakarta Sans"', 'Inter', sans-serif;
 
   --color-brand-50: #F4F1FE;
@@ -42,7 +50,219 @@ body {
   padding: 0;
   -webkit-tap-highlight-color: transparent;
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  background-color: #F4F1FE;
+  background-color: var(--app-background);
+  color: var(--app-text);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+html.dark,
+html.dark body {
+  color-scheme: dark;
+}
+
+html.dark body,
+html.dark #root {
+  background-color: var(--app-background);
+  color: var(--app-text);
+}
+
+html.dark #root > div,
+html.dark #root main,
+html.dark #root main > *,
+html.dark #root main > * > * {
+  background-color: var(--app-background);
+  color: var(--app-text);
+}
+
+html.dark #root main [class~="bg-white"],
+html.dark #root main [class*="bg-white/"] {
+  background-color: var(--surface-background) !important;
+}
+
+html.dark #root main [class*="bg-[#F4F1FE]"],
+html.dark #root main [class*="bg-[#F8F7FC]"],
+html.dark #root main [class*="bg-[#ECE8FA]"],
+html.dark #root main [class*="bg-[#EDE9F9]"],
+html.dark #root main [class*="bg-[#F2EFFC]"] {
+  background-color: var(--app-soft-surface) !important;
+}
+
+html.dark #root main [class*="border-[#ECE8FA]"],
+html.dark #root main [class*="border-[#EAE4FC]"],
+html.dark #root main [class*="divide-[#F4F1FE]"],
+html.dark #root main [class*="divide-gray-100"] {
+  border-color: var(--app-border) !important;
+}
+
+html.dark #root main [class*="text-[#827C99]"],
+html.dark #root main [class*="text-[#7B768F]"],
+html.dark #root main [class*="text-[#9E99B0]"] {
+  color: var(--app-muted) !important;
+}
+
+html.dark #root main [class~="text-ink-900"],
+html.dark #root main [class~="text-ink-700"] {
+  color: var(--app-text) !important;
+}
+
+html.dark #root main [class~="text-ink-500"],
+html.dark #root main [class~="text-ink-400"] {
+  color: var(--app-muted) !important;
+}
+
+html.dark #root main input:not([type="checkbox"]),
+html.dark #root main textarea,
+html.dark #root main select {
+  background-color: #292538 !important;
+  color: var(--app-text) !important;
+  border-color: var(--app-border);
+}
+
+html.dark nav > svg path {
+  fill: var(--surface-background);
+}
+
+html.dark nav:not([class*="fixed"]) > svg path {
+  fill: var(--surface-background);
+}
+
+/* Shared dialogs render beside the router, so theme them outside the main screen tree. */
+html.dark body > #root ~ *,
+html.dark #root [class*="fixed inset-0"] {
+  color: var(--app-text);
+}
+
+html.dark #root [class*="fixed inset-0"] > div > div {
+  background-color: var(--surface-background) !important;
+  color: var(--app-text) !important;
+}
+
+html.dark #root [class*="fixed inset-0"] [class~="text-ink-900"],
+html.dark #root [class*="fixed inset-0"] [class~="text-ink-700"] {
+  color: var(--app-text) !important;
+}
+
+html.dark #root [class*="fixed inset-0"] [class~="text-ink-500"],
+html.dark #root [class*="fixed inset-0"] [class~="text-ink-400"] {
+  color: var(--app-muted) !important;
+}
+
+html.dark #root [class*="fixed inset-0"] [class*="bg-[#F4F1FE]"],
+html.dark #root [class*="fixed inset-0"] [class*="bg-[#EAE4FC]"] {
+  background-color: var(--app-soft-surface) !important;
+}
+
+html.dark #root [class*="fixed inset-0"] button[class*="border-[#F0EDF8]"] {
+  background-color: #242131;
+  border-color: var(--app-border);
+}
+
+.add-option-grid > .add-option-card {
+  position: relative;
+  min-height: 122px !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: flex-start;
+  gap: 0 !important;
+  padding: 14px !important;
+  border-radius: 20px !important;
+  box-shadow: 0 3px 12px rgba(35, 27, 68, 0.045) !important;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease !important;
+}
+
+.add-option-grid > .add-option-card:nth-of-type(1) {
+  background: #FFFAFC !important;
+  border-color: #F5DDE6 !important;
+}
+
+.add-option-grid > .add-option-card:nth-of-type(2) {
+  background: #F8FCF9 !important;
+  border-color: #DDEFE4 !important;
+}
+
+.add-option-grid > .add-option-card:nth-of-type(3) {
+  background: #FBFAFF !important;
+  border-color: #E6DFFA !important;
+}
+
+.add-option-grid > .add-option-card:nth-of-type(4) {
+  background: #FFFCF7 !important;
+  border-color: #F5E6D2 !important;
+}
+
+.add-option-grid > .add-option-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 9px 22px rgba(58, 43, 110, 0.1) !important;
+}
+
+.add-option-grid > .add-option-card:active {
+  transform: scale(0.98);
+}
+
+.add-option-grid > .add-option-card > div:first-child {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+}
+
+.add-option-grid > .add-option-card > div:nth-child(2) {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.add-option-grid > .add-option-card > div:nth-child(2) > div:first-child {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.add-option-grid > .add-option-card > div:nth-child(2) > div:last-child {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.add-option-grid > .add-option-card > svg:last-child {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  top: 16px;
+  right: 14px;
+  margin: 0;
+}
+
+html.dark .add-option-grid > .add-option-card {
+  background: #242131 !important;
+  border-color: var(--app-border) !important;
+}
+
+@media (max-width: 350px) {
+  .add-option-grid > .add-option-card {
+    min-height: 112px !important;
+    padding: 11px !important;
+  }
+}
+
+html.dark #root [class*="fixed inset-0"] input,
+html.dark #root [class*="fixed inset-0"] textarea,
+html.dark #root [class*="fixed inset-0"] select {
+  background-color: #292538 !important;
+  color: var(--app-text) !important;
+  border-color: var(--app-border) !important;
+}
+
+html.dark nav.fixed {
+  color: var(--app-muted);
+}
+
+html.dark #root main [class*="text-ink-900"],
+html.dark #root main [class*="text-ink-700"] {
+  color: var(--app-text) !important;
+}
+
+html.dark #root main [class*="text-ink-500"],
+html.dark #root main [class*="text-ink-400"] {
+  color: var(--app-muted) !important;
 }
 
 /* Ensure root element fills the viewport */
@@ -111,6 +331,35 @@ body {
   background: linear-gradient(135deg, #7B4FF8 0%, #5B30E5 100%);
   position: relative;
   overflow: hidden;
+}
+
+.wallet-summary-card {
+  background: linear-gradient(135deg, #7B4FF8 0%, #5B30E5 100%);
+}
+
+.wallet-summary-card::before,
+.wallet-summary-card::after {
+  content: '';
+  position: absolute;
+  right: -18px;
+  top: -34px;
+  width: 116px;
+  height: 116px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.wallet-summary-card::after {
+  right: -1px;
+  top: -9px;
+  width: 70px;
+  height: 70px;
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+html.dark #root main > * > .wallet-summary-card {
+  background: linear-gradient(135deg, #7B4FF8 0%, #5B30E5 100%) !important;
 }
 .hero-purple-card::before {
   content: '';
