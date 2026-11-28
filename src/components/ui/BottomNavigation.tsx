@@ -52,20 +52,23 @@ const tabLabels: Record<Tab, string> = {
 export function BottomNavigation({ onTabChange, onAddNew }: BottomNavigationProps) {
   const location = useLocation();
 
-  // Determine which bottom-nav icon is active based on route
-  const activeBottomTab: Tab =
+  // Determine which bottom-nav icon is active based on route.
+  // Sub-modules (/savings, /tasks) do not highlight Home.
+  const activeBottomTab: Tab | null =
     location.pathname === '/wallet'
       ? 'wallet'
       : location.pathname === '/schedule'
         ? 'schedule'
         : location.pathname === '/profile'
           ? 'profile'
-          : 'home';
+          : location.pathname === '/'
+            ? 'home'
+            : null;
 
   return (
-    <nav className="relative z-20 h-[88px] shrink-0 select-none">
+    <nav className="fixed z-[60] bottom-0 left-0 right-0 h-[calc(88px+env(safe-area-inset-bottom))] select-none w-full pointer-events-none">
       <svg
-        className="notched-nav-svg absolute inset-0 w-full h-full pointer-events-none"
+        className="notched-nav-svg absolute bottom-0 left-0 right-0 h-[88px] w-full pointer-events-none"
         viewBox="0 0 378 88"
         preserveAspectRatio="none"
         fill="none"
@@ -74,23 +77,26 @@ export function BottomNavigation({ onTabChange, onAddNew }: BottomNavigationProp
       </svg>
 
       <button
+        type="button"
         onClick={onAddNew}
-        className="fab-purple-orb absolute left-1/2 -translate-x-1/2 top-[1px] w-[52px] h-[52px] rounded-full hover:brightness-105 active:scale-95 text-white flex items-center justify-center transition-all z-10"
+        className="fab-purple-orb pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[calc(42px+env(safe-area-inset-bottom))] w-[60px] h-[60px] rounded-full hover:brightness-105 active:scale-95 text-white flex items-center justify-center transition-all z-[61] touch-manipulation cursor-pointer"
         aria-label="Add New"
+        title="Add expense, savings goal, task, or event"
       >
         <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth="2.3" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m7-7H5" />
         </svg>
       </button>
 
-      <div className="relative z-10 flex items-center justify-between px-7 pt-[31px]">
-        <div className="flex items-center gap-8">
+      <div className="pointer-events-auto absolute bottom-[env(safe-area-inset-bottom)] left-0 right-0 z-[60] h-[58px] flex items-center justify-between px-7 pt-2">
+        <div className="flex items-center gap-8 min-w-[44px]">
           <button
             onClick={() => onTabChange('home')}
             className={`p-1.5 rounded-xl transition-colors ${
               activeBottomTab === 'home' ? 'text-brand-600' : 'text-[#827C99] hover:text-brand-600'
             }`}
             aria-label={tabLabels.home}
+            aria-current={activeBottomTab === 'home' ? 'page' : undefined}
           >
             {tabIcons.home}
           </button>
@@ -100,17 +106,19 @@ export function BottomNavigation({ onTabChange, onAddNew }: BottomNavigationProp
               activeBottomTab === 'wallet' ? 'text-brand-600' : 'text-[#827C99] hover:text-brand-600'
             }`}
             aria-label={tabLabels.wallet}
+            aria-current={activeBottomTab === 'wallet' ? 'page' : undefined}
           >
             {tabIcons.wallet}
           </button>
         </div>
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-8 min-w-[44px]">
           <button
             onClick={() => onTabChange('schedule')}
             className={`p-1.5 rounded-xl transition-colors ${
               activeBottomTab === 'schedule' ? 'text-brand-600' : 'text-[#827C99] hover:text-brand-600'
             }`}
             aria-label={tabLabels.schedule}
+            aria-current={activeBottomTab === 'schedule' ? 'page' : undefined}
           >
             {tabIcons.schedule}
           </button>
@@ -120,6 +128,7 @@ export function BottomNavigation({ onTabChange, onAddNew }: BottomNavigationProp
               activeBottomTab === 'profile' ? 'text-brand-600' : 'text-[#827C99] hover:text-brand-600'
             }`}
             aria-label={tabLabels.profile}
+            aria-current={activeBottomTab === 'profile' ? 'page' : undefined}
           >
             {tabIcons.profile}
           </button>
