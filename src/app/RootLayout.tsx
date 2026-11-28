@@ -1,48 +1,45 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { PhoneFrame } from '@/components/ui/PhoneFrame';
 import { BottomNavigation } from '@/components/ui/BottomNavigation';
 import { Toast } from '@/components/ui/Toast';
-import AddNewModal from '@/components/modals/AddNewModal';
 import { useDayflowStore } from '@/store/useDayflowStore';
 
 export default function RootLayout() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const showBottomNav = location.pathname !== '/profile';
+  const location = useLocation();
 
-  const { isModalOpen, toastMessage, toastVisible } = useDayflowStore();
+  const toastMessage = useDayflowStore((state) => state.toastMessage);
+  const toastVisible = useDayflowStore((state) => state.toastVisible);
+  const openModal = useDayflowStore((state) => state.openModal);
+  const closeModal = useDayflowStore((state) => state.closeModal);
 
   return (
-    <PhoneFrame>
-      <main className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col">
+    <div className="h-[100dvh] min-h-0 bg-[#F8F7FC] flex flex-col w-full overflow-hidden">
+        <main className="flex-1 min-h-0 relative flex flex-col w-full max-w-none">
         <Outlet />
       </main>
-      {showBottomNav && (
-        <BottomNavigation
-          onTabChange={(tab) => {
-            const pathMap: Record<string, string> = {
-              home: '/',
-              wallet: '/wallet',
-              schedule: '/schedule',
-              profile: '/profile',
-            };
-            navigate(pathMap[tab]);
-          }}
-          onAddNew={() => {
-            const { openModal } = useDayflowStore.getState();
-            openModal();
-          }}
-        />
-      )}
+      <BottomNavigation
+        onTabChange={(tab) => {
+          const pathMap: Record<string, string> = {
+            home: '/',
+            wallet: '/wallet',
+            schedule: '/schedule',
+            profile: '/profile',
+          };
+          navigate(pathMap[tab]);
+        }}
+        onAddNew={() => {
+          if (location.pathname === '/wallet') openModal('expense');
+          else if (location.pathname === '/savings') openModal('savings');
+          else if (location.pathname === '/tasks') openModal('task');
+          else if (location.pathname === '/schedule') openModal('event');
+          else openModal('menu');
+        }}
+      />
       <Toast
         message={toastMessage}
         visible={toastVisible}
-        onDismiss={() => {
-          const { closeModal } = useDayflowStore.getState();
-          closeModal();
-        }}
+        onDismiss={closeModal}
       />
-      {isModalOpen && <AddNewModal />}
-    </PhoneFrame>
+    </div>
   );
 }
