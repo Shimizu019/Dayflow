@@ -1,214 +1,138 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDayflowStore, type WalletPeriod } from '@/store/useDayflowStore';
-import { formatPeso } from '@/utils/format';
+import { useDayflowStore } from '@/store/useDayflowStore';
+import { formatPesoFromCentavos } from '@/utils/format';
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'Food & Drinks': '#FFFFFF',
+  Transport: '#D7C4FF',
+  Others: '#A98AF8',
+};
+
+const CATEGORY_ICONS: Record<string, { bg: string; text: string }> = {
+  'Food & Drinks': { bg: '#FCE7EE', text: '#DB4377' },
+  Transport: { bg: '#E3F7ED', text: '#16A34A' },
+  Others: { bg: '#ECE8FA', text: '#6D42EF' },
+};
 
 export default function WalletScreen() {
   const navigate = useNavigate();
-  const {
-    currentBalance,
-    totalIncome,
-    totalExpenses,
-    spending,
-    transactions,
-    walletPeriod,
-    setWalletPeriod,
-  } = useDayflowStore();
-
-  const r = 46;
-  const C = 2 * Math.PI * r;
-  const seg1 = (spending[0].pct / 100) * C;
-  const seg2 = (spending[1].pct / 100) * C;
-  const seg3 = (spending[2].pct / 100) * C;
-
-  const txRows = transactions.map((tx) => {
-    const isFood = tx.type === 'food';
-    return (
-      <div key={tx.id} className="flex items-center justify-between py-3">
-        <div className="flex items-center gap-3.5">
-          <div
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-              isFood ? 'bg-[#FCE7EE] text-[#DB4377]' : 'bg-[#E3F7ED] text-[#16A34A]'
-            }`}
-          >
-            {isFood ? (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 2a1 1 0 011 1v5a2 2 0 002 2V3a1 1 0 112 0v7a2 2 0 002-2V3a1 1 0 112 0v5a4 4 0 01-3 3.87V21a1 1 0 11-2 0v-9.13A4 4 0 016 8V3a1 1 0 011-1zm11 0a3 3 0 013 3v7a1 1 0 01-1 1h-1v8a1 1 0 11-2 0V3a1 1 0 011-1z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M5 11l1.5-4.5A2 2 0 018.4 5h7.2a2 2 0 011.9 1.5L19 11v6a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1v-6zm2.5 2a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5zm9 0a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5zM7.8 9.5h8.4l-.8-2.5H8.6l-.8 2.5z" />
-              </svg>
-            )}
-          </div>
-          <div>
-            <div className="text-[14px] font-bold text-ink-900">{tx.title}</div>
-            <div className="text-[12px] text-ink-500 mt-0.5">{`${formatPeso(tx.amount)} • ${tx.timeLabel}`}</div>
-          </div>
-        </div>
-        <button
-          onClick={() => {}}
-          className="p-1.5 text-ink-500 hover:text-ink-900 rounded-lg"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM10 8.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM11.5 15.5a1.5 1.5 0 10-3 0 1.5 1.5 0 003 0z" />
-          </svg>
-        </button>
-      </div>
-    );
+  const { expenses, walletPeriod, setWalletPeriod, deleteExpense, openModal } = useDayflowStore();
+  const [now] = useState(() => new Date());
+  const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedRange, setSelectedRange] = useState(() => walletPeriod === 'This Month' ? monthKey(now) : walletPeriod);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const monthOptions = useMemo(() => Array.from({ length: 13 }, (_, i) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return { value: monthKey(date), label: i === 0 ? 'This Month' : date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+  }), [now]);
+  const filteredExpenses = expenses.filter((expense) => {
+    const date = new Date(`${expense.date}T00:00:00`);
+    if (selectedRange.startsWith('month:')) return monthKey(date) === selectedRange.slice(6);
+    if (/^\d{4}-\d{2}$/.test(selectedRange)) return monthKey(date) === selectedRange;
+    if (selectedRange === 'This Week') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+      const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+      return date >= start && date < end;
+    }
+    return true;
+  }).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  const total = filteredExpenses.reduce((sum, expense) => sum + expense.amountCentavos, 0);
+  const labels = ['Food & Drinks', 'Transport', 'Others'];
+  const rawCategories = labels.map((label) => {
+    const amount = filteredExpenses.filter((expense) => expense.category === label).reduce((sum, expense) => sum + expense.amountCentavos, 0);
+    const exactPct = total ? amount / total * 100 : 0;
+    return { label, amount, pct: Math.floor(exactPct), remainder: exactPct % 1, color: CATEGORY_COLORS[label] };
   });
-
-  const periods: WalletPeriod[] = ['This Month', 'This Week', 'All Time'];
+  const remainingPct = total ? 100 - rawCategories.reduce((sum, category) => sum + category.pct, 0) : 0;
+  const categories = rawCategories.map((category) => ({ ...category, pct: category.pct + (rawCategories.slice().sort((a, b) => b.remainder - a.remainder).slice(0, remainingPct).some((item) => item.label === category.label) ? 1 : 0) }));
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  const handleDelete = async (id: number) => {
+    if (window.confirm('Delete this expense? This action cannot be undone.')) await deleteExpense(id);
+  };
+  const changeRange = (value: string) => {
+    setSelectedRange(value);
+    setSelectedCategory(null);
+    if (value === 'This Week' || value === 'All Time') setWalletPeriod(value);
+    else setWalletPeriod('This Month');
+  };
+  const formatExpenseDate = (date: string, createdAt: string) => {
+    const parsed = new Date(`${date}T00:00:00`);
+    const dateLabel = parsed.toDateString() === now.toDateString()
+      ? 'Today'
+      : parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const time = new Date(createdAt);
+    const timeLabel = Number.isNaN(time.getTime()) ? '' : time.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return timeLabel ? `${dateLabel} · ${timeLabel}` : dateLabel;
+  };
 
   return (
-    <div className="flex-1 overflow-y-auto no-scrollbar relative flex flex-col px-5 pt-2 pb-8">
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => navigate('/')}
-          className="p-1.5 -ml-1.5 rounded-xl text-ink-900 hover:bg-brand-100/60 transition-colors"
-          aria-label="Back"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
+    <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar relative flex flex-col px-3 pt-2 pb-[calc(112px+env(safe-area-inset-bottom))]">
+      <header className="mb-4 min-h-[32px] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+        <button onClick={() => navigate('/')} className="p-1.5 -ml-1.5 rounded-xl text-ink-900 hover:bg-brand-100/60 shrink-0" aria-label="Back home">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
         </button>
-        <h1 className="text-[17px] font-bold text-ink-900">My Wallet</h1>
-        <button
-          onClick={() => navigate('/schedule')}
-          className="p-1.5 -mr-1.5 rounded-xl text-ink-900 hover:bg-brand-100/60 transition-colors"
-          aria-label="Schedule"
-        >
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="4" width="18" height="17" rx="3" />
-            <path strokeLinecap="round" d="M8 2v4M16 2v4M3 9h18" />
-          </svg>
-        </button>
-      </div>
+        <h1 className="text-[16px] font-bold text-ink-900 whitespace-nowrap">My Wallet</h1>
+        </div>
+        <label className="px-2.5 py-1.5 rounded-xl bg-brand-50 text-brand-600 text-[10px] font-semibold flex items-center gap-1 shrink-0">
+          <span className="sr-only">Filter wallet period</span>
+          <select value={selectedRange} onChange={(event) => changeRange(event.target.value)} className="max-w-[105px] appearance-none bg-transparent text-brand-600 outline-none" aria-label="Filter wallet period">
+            {monthOptions.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}
+            <option value="This Week">This Week</option><option value="All Time">All Time</option>
+          </select>
+          <svg className="w-3 h-3 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd"/></svg>
+        </label>
+      </header>
 
-      <div className="hero-purple-card rounded-[24px] px-5 py-5 text-white shadow-hero mb-3.5 flex items-center justify-between">
-        <div>
-          <div className="text-[13px] font-medium text-white/85">Current Balance</div>
-          <div className="text-[28px] font-extrabold tracking-tight mt-0.5">{formatPeso(currentBalance, true)}</div>
+      <section className="wallet-summary-card relative overflow-hidden rounded-[20px] border border-white/20 p-4 mb-4 text-white shadow-hero">
+        <div className="relative z-[1] flex items-start justify-between border-b border-white/20 pb-3 mb-3">
+          <div><div className="text-[11px] font-medium text-white/75">Total Expenses</div><div className="text-[23px] leading-tight font-extrabold tracking-tight text-white tabular-nums mt-1">{formatPesoFromCentavos(total, true)}</div></div>
+          {total > 0 && <span className="px-2.5 py-1 rounded-lg bg-white/20 text-white/90 text-[9px] font-semibold">Tap category</span>}
         </div>
-        <div className="w-11 h-11 rounded-2xl border border-white/30 bg-white/10 flex items-center justify-center">
-          <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <rect x="3" y="6" width="18" height="13" rx="3" />
-            <path d="M16 12.5h3" />
-            <path d="M6 6V5a2 2 0 012-2h8a2 2 0 012 2v1" />
-          </svg>
+        <div className="relative z-[1] flex items-center justify-between px-1 py-0.5">
+          <div className="relative w-[96px] h-[96px] sm:w-[116px] sm:h-[116px] shrink-0 flex items-center justify-center">
+            <svg className="w-[96px] h-[96px] sm:w-[116px] sm:h-[116px] -rotate-90" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r={radius} fill="transparent" stroke="rgba(255,255,255,0.24)" strokeWidth="22" />
+              {categories.map((category) => {
+                const length = category.pct / 100 * circumference;
+                const dashOffset = offset;
+                offset += length;
+                return category.pct ? <circle key={category.label} role="button" tabIndex={0} aria-label={`${category.label}: ${category.pct}%`} onClick={() => setSelectedCategory(selectedCategory === category.label ? null : category.label)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setSelectedCategory(selectedCategory === category.label ? null : category.label); }} className="cursor-pointer" cx="60" cy="60" r={radius} fill="transparent" stroke={category.color} strokeWidth="22" strokeDasharray={`${length} ${circumference}`} strokeDashoffset={-dashOffset} /> : null;
+              })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><span className="text-[9px] text-white/75">{selectedCategory ?? 'Total'}</span><span className="text-[11px] font-bold text-white tabular-nums">{formatPesoFromCentavos(selectedCategory ? categories.find((item) => item.label === selectedCategory)?.amount ?? 0 : total, true)}</span>{selectedCategory && <span className="text-[9px] font-semibold text-white/75">{categories.find((item) => item.label === selectedCategory)?.pct ?? 0}%</span>}</div>
+          </div>
+          <div className="space-y-3 pr-1">
+            {categories.map((category) => <button type="button" key={category.label} onClick={() => setSelectedCategory(selectedCategory === category.label ? null : category.label)} className={`flex items-center gap-2 text-left rounded-md ${selectedCategory === category.label ? 'bg-white/15' : ''}`}><span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: category.color }}/><span className="flex items-center justify-between gap-2 sm:gap-3 min-w-0 w-[128px]"><span className="text-[10px] sm:text-[11px] font-semibold text-white leading-tight truncate">{category.label}</span><span className="text-[10px] sm:text-[11px] font-bold text-white tabular-nums">{category.pct}%</span></span></button>)}
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        <div className="bg-white rounded-[20px] p-3.5 shadow-card flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#E3F7ED] text-[#16A34A] flex items-center justify-center shrink-0">
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
-            </svg>
+      <section>
+        <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] font-bold text-ink-900">Transactions</h2><span className="text-[10px] font-medium text-ink-500">{filteredExpenses.length} {filteredExpenses.length === 1 ? 'record' : 'records'}</span></div>
+        {filteredExpenses.length === 0 ? (
+          <div className="bg-white rounded-[20px] border border-[#ECE8FA] p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-[#ECE8FA] flex items-center justify-center mx-auto mb-3"><svg className="w-6 h-6 text-[#A78BFA]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 11h6m-3-6v6M12 3a9 9 0 100 18 9 9 0 000-18z" /></svg></div>
+            <h3 className="text-[15px] font-bold text-ink-900">No expenses yet</h3><p className="text-[13px] text-ink-500 mt-1">Tap the center + button to record your first expense.</p>
           </div>
-          <div>
-            <div className="text-[11px] font-medium text-ink-500">Total Income</div>
-            <div className="text-[15px] font-extrabold text-ink-900 mt-0.5">{formatPeso(totalIncome)}</div>
-          </div>
-        </div>
-        <div className="bg-[#FDF5F7] rounded-[20px] p-3.5 shadow-card flex items-center gap-3 border border-[#FCE7EE]/70">
-          <div className="w-9 h-9 rounded-full bg-[#FCE4EC] text-[#E11D48] flex items-center justify-center shrink-0">
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div>
-            <div className="text-[11px] font-medium text-ink-500">Total Expenses</div>
-            <div className="text-[15px] font-extrabold text-ink-900 mt-0.5">{formatPeso(totalExpenses)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-bold text-ink-900">Spending Overview</h2>
-          <button
-            onClick={() => {
-              const idx = periods.indexOf(walletPeriod);
-              const next = periods[(idx + 1) % periods.length];
-              setWalletPeriod(next);
-            }}
-            className="px-3 py-1 rounded-xl bg-brand-100/80 text-ink-900 text-[11px] font-semibold flex items-center gap-1 hover:bg-brand-100 transition-colors"
-          >
-            <span>{walletPeriod}</span>
-            <svg className="w-3.5 h-3.5 text-ink-700" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex items-center justify-between px-2 py-1">
-          <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
-            <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
-              <circle
-                cx="60"
-                cy="60"
-                r={r}
-                fill="transparent"
-                stroke="#C7B6FB"
-                strokeWidth="22"
-                strokeDasharray={`${seg3} ${C}`}
-                strokeDashoffset={`-${seg1 + seg2}`}
-              />
-              <circle
-                cx="60"
-                cy="60"
-                r={r}
-                fill="transparent"
-                stroke="#9370F8"
-                strokeWidth="22"
-                strokeDasharray={`${seg2} ${C}`}
-                strokeDashoffset={`-${seg1}`}
-              />
-              <circle
-                cx="60"
-                cy="60"
-                r={r}
-                fill="transparent"
-                stroke="#5D32E6"
-                strokeWidth="22"
-                strokeDasharray={`${seg1} ${C}`}
-                strokeDashoffset="0"
-              />
-            </svg>
-          </div>
-          <div className="space-y-2.5 pr-2">
-            {spending.map((item) => (
-              <div key={item.label} className="flex items-start gap-2.5">
-                <span
-                  className="w-2.5 h-2.5 rounded-full mt-1 shrink-0"
-                  style={{ backgroundColor: item.color }}
-                />
-                <div>
-                  <div className="text-[12px] font-semibold text-ink-900 leading-tight">{item.label}</div>
-                  <div className="text-[12px] font-bold text-ink-900">{item.pct}%</div>
+        ) : (
+          <div className="bg-white rounded-[18px] border border-[#ECE8FA] shadow-card divide-y divide-[#F0EDF8] px-3.5 py-1">
+            {filteredExpenses.map((expense) => {
+              const icon = CATEGORY_ICONS[expense.category] ?? CATEGORY_ICONS.Others;
+              return <div key={expense.id} className="flex items-center justify-between gap-2 py-2.5">
+                <div className="flex-1 min-w-0"><div className="text-[11px] font-semibold text-ink-900 truncate">{expense.title}</div><div className="flex items-center gap-1.5 mt-1 min-w-0"><span className="rounded-md px-1.5 py-0.5 text-[8px] font-semibold whitespace-nowrap" style={{ backgroundColor: icon.bg, color: icon.text }}>{expense.category}</span><span className="text-[9px] text-ink-500 truncate">{formatExpenseDate(expense.date, expense.createdAt)}</span></div></div>
+                <div className="flex items-center gap-1 shrink-0"><span className="text-[10px] font-bold text-ink-900 tabular-nums mr-1">{formatPesoFromCentavos(expense.amountCentavos, true)}</span>
+                  <button onClick={() => openModal('expense', expense.id, 'expense')} className="p-1.5 text-ink-400 hover:text-brand-600 rounded-lg" aria-label={`Edit ${expense.title}`}><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button onClick={() => handleDelete(expense.id)} className="p-1.5 text-ink-400 hover:text-rose-600 rounded-lg" aria-label={`Delete ${expense.title}`}><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
                 </div>
-              </div>
-            ))}
+              </div>;
+            })}
           </div>
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-2.5">
-          <h2 className="text-[15px] font-bold text-ink-900">Transactions</h2>
-          <button
-            onClick={() => {}}
-            className="text-[12px] font-semibold text-brand-600 hover:underline flex items-center gap-0.5"
-          >
-            See all
-            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-            </svg>
-          </button>
-        </div>
-        <div className="bg-white rounded-[22px] shadow-card divide-y divide-gray-100 px-4">
-          {txRows}
-        </div>
-      </div>
+        )}
+      </section>
     </div>
   );
 }
