@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { useDayflowStore } from '@/store/useDayflowStore';
 import { validateAmount } from '@/utils/format';
 
@@ -7,6 +8,7 @@ export default function CenteredModal() {
     modalEditId,
     modalEditType,
     closeModal,
+    showToast,
     openModal,
     // Expenses
     addExpense,
@@ -31,6 +33,20 @@ export default function CenteredModal() {
     scheduleEvents,
   } = useDayflowStore();
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const runSave = async (operation: () => Promise<boolean>) => {
+    if (submitLock.current) return false;
+    submitLock.current = true;
+    setIsSubmitting(true);
+    try {
+      return await operation();
+    } finally {
+      submitLock.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
   if (modalState === 'closed') return null;
 
   const editId = modalEditId;
@@ -48,12 +64,13 @@ export default function CenteredModal() {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-[#141122]/65 backdrop-blur-[3px] transition-opacity px-3"
       role="presentation"
-      onClick={closeModal}
+      onClick={() => { if (!isSubmitting) closeModal(); }}
     >
       <div className="relative z-50 w-full max-w-[380px]" onClick={(e) => e.stopPropagation()}>
         <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="bg-white rounded-[28px] p-5 sm:p-6 shadow-[0_24px_70px_-20px_rgba(25,22,39,0.42)] ring-1 ring-black/[0.04] transform transition-all duration-200 scale-100 max-h-[calc(100dvh-32px)] overflow-y-auto">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center mb-4">
             <button
+              disabled={isSubmitting}
               onClick={() => {
                 if (!isMenu) {
                   openModal('menu');
@@ -85,6 +102,7 @@ export default function CenteredModal() {
                       : 'Add something new'}
             </h3>
             <button
+              disabled={isSubmitting}
               onClick={closeModal}
               className="justify-self-end w-7 h-7 rounded-full bg-[#F4F1FE] flex items-center justify-center text-ink-500 hover:text-ink-900 hover:bg-[#EAE4FC] transition-colors"
               aria-label="Close dialog"
@@ -178,13 +196,14 @@ export default function CenteredModal() {
                     const amount = Number((form.elements.namedItem('amount') as HTMLInputElement).value);
                     const category = (form.elements.namedItem('category') as HTMLSelectElement).value as 'Food & Drinks' | 'Transport' | 'Others';
                     const date = (form.elements.namedItem('date') as HTMLInputElement).value || new Date().toISOString().split('T')[0];
-                    if (!title.trim() || !validateAmount(amount)) return;
-                    if (editId && editType === 'expense') {
-                      await updateExpense(editId, { title, amountCentavos: Math.round(amount * 100), category, date });
-                    } else {
-                      await addExpense(title, amount, category, date);
+                    if (!title.trim() || !validateAmount(amount) || !date) {
+                      showToast('Unable to save expense. Check your information and try again.');
+                      return;
                     }
-                    closeModal();
+                    const saved = await runSave(() => editId != null && editType === 'expense'
+                      ? updateExpense(editId, { title, amountCentavos: Math.round(amount * 100), category, date })
+                      : addExpense(title, amount, category, date));
+                    if (saved) closeModal();
                   }}
                   className="space-y-3"
                 >
@@ -235,17 +254,19 @@ export default function CenteredModal() {
                   </div>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full py-3 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-hero mt-2"
                   >
-                    {isEditMode ? 'Save Changes' : 'Save Expense'}
+                    {isSubmitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Save Expense'}
                   </button>
                   {isEditMode && (
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteExpense(editId!);
-                        closeModal();
+                        const deleted = await runSave(() => deleteExpense(editId!));
+                        if (deleted) closeModal();
                       }}
+                      disabled={isSubmitting}
                       className="w-full py-3 rounded-2xl bg-[#FCE7EE] text-[#E11D48] font-bold text-sm mt-1"
                     >
                       Delete Expense
@@ -264,13 +285,14 @@ export default function CenteredModal() {
                     const title = (form.elements.namedItem('title') as HTMLInputElement).value;
                     const saved = Number((form.elements.namedItem('saved') as HTMLInputElement).value);
                     const target = Number((form.elements.namedItem('target') as HTMLInputElement).value);
-                    if (!title.trim() || target <= 0) return;
-                    if (editId && editType === 'savings') {
-                      await updateSavingsGoal(editId, { title, currentCentavos: Math.round(saved * 100), targetCentavos: Math.round(target * 100) });
-                    } else {
-                      await addSavingsGoal(title, saved, target);
+                    if (!title.trim() || !Number.isFinite(saved) || saved < 0 || !Number.isFinite(target) || target <= 0) {
+                      showToast('Unable to save savings goal. Check your information and try again.');
+                      return;
                     }
-                    closeModal();
+                    const didSave = await runSave(() => editId != null && editType === 'savings'
+                      ? updateSavingsGoal(editId, { title, currentCentavos: Math.round(saved * 100), targetCentavos: Math.round(target * 100) })
+                      : addSavingsGoal(title, saved, target));
+                    if (didSave) closeModal();
                   }}
                   className="space-y-3"
                 >
@@ -291,7 +313,8 @@ export default function CenteredModal() {
                         name="saved"
                         type="number"
                         min="0"
-                        defaultValue={editGoal ? (editGoal.currentCentavos / 100).toString() : '500'}
+                        step="0.01"
+                        defaultValue={editGoal ? (editGoal.currentCentavos / 100).toString() : '0'}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F1FE] text-sm font-bold text-ink-900 outline-none"
                       />
                     </div>
@@ -301,6 +324,7 @@ export default function CenteredModal() {
                         name="target"
                         type="number"
                         min="100"
+                        step="0.01"
                         defaultValue={editGoal ? (editGoal.targetCentavos / 100).toString() : '5000'}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F1FE] text-sm font-bold text-ink-900 outline-none"
                       />
@@ -308,17 +332,19 @@ export default function CenteredModal() {
                   </div>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full py-3 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-hero mt-2"
                   >
-                    {isEditMode ? 'Save Changes' : 'Create Goal'}
+                    {isSubmitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Create Goal'}
                   </button>
                   {isEditMode && (
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteSavingsGoal(editId!);
-                        closeModal();
+                        const deleted = await runSave(() => deleteSavingsGoal(editId!));
+                        if (deleted) closeModal();
                       }}
+                      disabled={isSubmitting}
                       className="w-full py-3 rounded-2xl bg-[#FCE7EE] text-[#E11D48] font-bold text-sm mt-1"
                     >
                       Delete Goal
@@ -339,13 +365,14 @@ export default function CenteredModal() {
                     const dueDate = (form.elements.namedItem('dueDate') as HTMLInputElement).value;
                     const dueTime = (form.elements.namedItem('dueTime') as HTMLInputElement).value;
                     const priority = (form.elements.namedItem('priority') as HTMLSelectElement).value as 'High' | 'Medium' | 'Low';
-                    if (!title.trim() || !dueDate || !dueTime) return;
-                    if (editId && editType === 'task') {
-                      await updateTask(editId, { title, description, dueDate, dueTime, priority });
-                    } else {
-                      await addTask(title, description, dueDate, dueTime, priority);
+                    if (!title.trim() || !dueDate || !dueTime) {
+                      showToast('Unable to save task. Check your information and try again.');
+                      return;
                     }
-                    closeModal();
+                    const didSave = await runSave(() => editId != null && editType === 'task'
+                      ? updateTask(editId, { title, description, dueDate, dueTime, priority })
+                      : addTask(title, description, dueDate, dueTime, priority));
+                    if (didSave) closeModal();
                   }}
                   className="space-y-3"
                 >
@@ -403,17 +430,19 @@ export default function CenteredModal() {
                   </div>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full py-3 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-hero mt-2"
                   >
-                    {isEditMode ? 'Save Changes' : 'Add Task'}
+                    {isSubmitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Add Task'}
                   </button>
                   {isEditMode && (
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteTask(editId!);
-                        closeModal();
+                        const deleted = await runSave(() => deleteTask(editId!));
+                        if (deleted) closeModal();
                       }}
+                      disabled={isSubmitting}
                       className="w-full py-3 rounded-2xl bg-[#FCE7EE] text-[#E11D48] font-bold text-sm mt-1"
                     >
                       Delete Task
@@ -432,14 +461,17 @@ export default function CenteredModal() {
                     const title = (form.elements.namedItem('title') as HTMLInputElement).value;
                     const date = (form.elements.namedItem('date') as HTMLInputElement).value;
                     const time = (form.elements.namedItem('time') as HTMLInputElement).value;
+                    const endTime = (form.elements.namedItem('endTime') as HTMLInputElement).value;
+                    const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
                     const location = (form.elements.namedItem('location') as HTMLInputElement).value;
-                    if (!title.trim() || !date || !time) return;
-                    if (editId && editType === 'schedule') {
-                      await updateEvent(editId, { title, date, time, location });
-                    } else {
-                      await addEvent(title, date, time, location);
+                    if (!title.trim() || !date || !time) {
+                      showToast('Unable to save event. Check your information and try again.');
+                      return;
                     }
-                    closeModal();
+                    const didSave = await runSave(() => editId != null && editType === 'schedule'
+                      ? updateEvent(editId, { title, date, time, endTime, description, location })
+                      : addEvent(title, date, time, endTime, description, location));
+                    if (didSave) closeModal();
                   }}
                   className="space-y-3"
                 >
@@ -472,6 +504,25 @@ export default function CenteredModal() {
                         className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F1FE] text-sm font-semibold text-ink-900 outline-none"
                       />
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-ink-700 mb-1">End Time (optional)</label>
+                      <input
+                        name="endTime"
+                        type="time"
+                        defaultValue={editEvent?.endTime ?? ''}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F1FE] text-sm font-semibold text-ink-900 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-ink-700 mb-1">Description (optional)</label>
+                    <textarea
+                      name="description"
+                      rows={2}
+                      defaultValue={editEvent?.description ?? ''}
+                      placeholder="Add event details..."
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#F4F1FE] text-sm text-ink-900 outline-none"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-ink-700 mb-1">Location</label>
@@ -485,17 +536,19 @@ export default function CenteredModal() {
                   </div>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full py-3 rounded-2xl bg-brand-600 text-white font-bold text-sm shadow-hero mt-2"
                   >
-                    {isEditMode ? 'Save Changes' : 'Save Event'}
+                    {isSubmitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Save Event'}
                   </button>
                   {isEditMode && (
                     <button
                       type="button"
                       onClick={async () => {
-                        await deleteEvent(editId!);
-                        closeModal();
+                        const deleted = await runSave(() => deleteEvent(editId!));
+                        if (deleted) closeModal();
                       }}
+                      disabled={isSubmitting}
                       className="w-full py-3 rounded-2xl bg-[#FCE7EE] text-[#E11D48] font-bold text-sm mt-1"
                     >
                       Delete Event
@@ -508,6 +561,7 @@ export default function CenteredModal() {
 
           <button
             onClick={closeModal}
+            disabled={isSubmitting}
             className="mt-4 w-full py-3 rounded-2xl border border-[#E5DDF8] bg-[#F4F1FE] hover:bg-[#EAE4FC] text-ink-700 font-bold text-[13px] transition-colors"
           >
             Cancel

@@ -35,6 +35,8 @@ export interface ScheduleActivity {
   title: string;
   start_time?: string;
   end_time?: string;
+  description?: string;
+  location?: string;
   date: string; // YYYY-MM-DD
   created_at: string;
   updated_at: string;
@@ -48,7 +50,7 @@ export interface ApplicationPreference {
 
 export interface ActivityLog {
   id: number;
-  type: "expense" | "savings" | "task";
+  type: "expense" | "savings" | "task" | "schedule";
   title: string;
   timestamp: string; // ISO format
   related_id?: number;

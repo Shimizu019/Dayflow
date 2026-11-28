@@ -1,32 +1,38 @@
-import { CapacitorSQLite } from "@capacitor-community/sqlite";
+import { CapacitorSQLite, SQLiteConnection } from "@capacitor-community/sqlite";
 
-let dbInitialized = false;
+let initialization: Promise<void> | null = null;
 const dbName = "dayflow_db";
+const sqliteConnection = new SQLiteConnection(CapacitorSQLite);
 
 export async function initializeSQLite(): Promise<void> {
-  if (dbInitialized) {
-    console.log("SQLite already initialized");
-    return;
-  }
+  if (initialization) return initialization;
 
-  await CapacitorSQLite.createConnection({
-    database: dbName,
-    encrypted: false,
-    mode: "no-encryption",
-    version: 1,
-    readonly: false,
+  initialization = (async () => {
+    let connection;
+    try {
+      await sqliteConnection.checkConnectionsConsistency();
+      const exists = await sqliteConnection.isConnection(dbName, false);
+      if (exists.result) connection = await sqliteConnection.retrieveConnection(dbName, false);
+    } catch (error) {
+      console.warn("Recovering SQLite connection state", error);
+    }
+
+    connection ??= await sqliteConnection.createConnection(dbName, false, "no-encryption", 1, false);
+    await connection.open();
+    await CapacitorSQLite.execute({ database: dbName, statements: "PRAGMA foreign_keys = ON;" });
+    console.info("SQLite connection ready", { database: dbName });
+  })().catch((error) => {
+    initialization = null;
+    console.error("SQLite initialization failed", error);
+    throw error;
   });
 
-  await CapacitorSQLite.open({ database: dbName });
-  await CapacitorSQLite.execute({ database: dbName, statements: "PRAGMA foreign_keys = ON;" });
-
-  dbInitialized = true;
-  console.log("SQLite initialized successfully");
+  return initialization;
 }
 
 export async function isSQLiteReady(): Promise<boolean> {
   try {
-    const result = await CapacitorSQLite.isDatabase({ database: dbName });
+    const result = await CapacitorSQLite.isDBOpen({ database: dbName });
     return result.result === true;
   } catch {
     return false;
@@ -35,6 +41,7 @@ export async function isSQLiteReady(): Promise<boolean> {
 
 export async function executeQuery(options: { query: string; params?: any[] }): Promise<any> {
   try {
+    await initializeSQLite();
     const statement = options.query.trim();
     const isReadQuery = /^(SELECT|WITH|EXPLAIN)\b/i.test(statement)
       || (/^PRAGMA\b/i.test(statement) && !/\s=/.test(statement));
@@ -67,9 +74,15 @@ export async function executeQuery(options: { query: string; params?: any[] }): 
 
 export async function transaction(queryArray: Array<{ query: string; params: any[] }>): Promise<void> {
   try {
+    await initializeSQLite();
     await CapacitorSQLite.beginTransaction({ database: dbName });
     for (const item of queryArray) {
-      await CapacitorSQLite.run({ database: dbName, statement: item.query, values: item.params });
+      await CapacitorSQLite.run({
+        database: dbName,
+        statement: item.query,
+        values: item.params,
+        transaction: false,
+      });
     }
     await CapacitorSQLite.commitTransaction({ database: dbName });
   } catch (error) {

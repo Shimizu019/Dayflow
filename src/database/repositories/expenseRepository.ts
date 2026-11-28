@@ -21,13 +21,15 @@ export async function getExpenseById(id: number): Promise<Expense | undefined> {
 };
 
 export async function createExpense(expense: Omit<Expense, "id" | "created_at" | "updated_at">): Promise<Expense> {
-  const result: any = await executeQuery({
-    query: "INSERT INTO expenses (title, amount, category, date, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING *",
+  const result = await executeQuery({
+    query: "INSERT INTO expenses (title, amount, category, date, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
     params: [expense.title, expense.amount, expense.category, expense.date],
   });
-  const r = result?.results;
-  return r ? (r[0] as Expense) : { id: 0, title: "", amount: 0, category: "Others", date: "", created_at: "", updated_at: "" } as Expense;
-};
+  if (!result.lastId || !result.changes) throw new Error("Expense insert was not confirmed");
+  const created = await getExpenseById(result.lastId);
+  if (!created) throw new Error("Inserted expense could not be read back");
+  return created;
+}
 
 export async function updateExpense(id: number, updates: Partial<Expense>): Promise<boolean> {
   const sets: string[] = [];

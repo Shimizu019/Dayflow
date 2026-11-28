@@ -15,7 +15,7 @@ import {
 import {
   getAllScheduleActivities, createScheduleActivity, updateScheduleActivity, deleteScheduleActivity,
 } from '@/database/repositories/scheduleRepository';
-import { recordActivity } from '@/database/repositories/activityLogRepository';
+import { getRecentActivities, recordActivity } from '@/database/repositories/activityLogRepository';
 import { savePreference } from '@/database/repositories/preferenceRepository';
 
 export type Tab = 'home' | 'wallet' | 'savings' | 'tasks' | 'schedule' | 'profile';
@@ -57,7 +57,9 @@ export interface ScheduleEvent {
   title: string;
   date: string;
   time: string;
-  location: string;
+  endTime?: string;
+  description?: string;
+  location?: string;
   createdAt: string;
 }
 
@@ -113,23 +115,23 @@ interface DayflowState {
   openModal: (state: ModalState, editId?: number, editType?: 'expense' | 'savings' | 'task' | 'schedule') => void;
   closeModal: () => void;
 
-  addExpense: (title: string, amountPesos: number, category: 'Food & Drinks' | 'Transport' | 'Others', date: string) => Promise<void>;
-  updateExpense: (id: number, updates: Partial<Expense>) => Promise<void>;
-  deleteExpense: (id: number) => Promise<void>;
+  addExpense: (title: string, amountPesos: number, category: 'Food & Drinks' | 'Transport' | 'Others', date: string) => Promise<boolean>;
+  updateExpense: (id: number, updates: Partial<Expense>) => Promise<boolean>;
+  deleteExpense: (id: number) => Promise<boolean>;
 
-  addSavingsGoal: (title: string, currentPesos: number, targetPesos: number) => Promise<void>;
-  updateSavingsAmount: (id: number, currentPesos: number) => Promise<void>;
-  updateSavingsGoal: (id: number, updates: Partial<SavingsGoal>) => Promise<void>;
-  deleteSavingsGoal: (id: number) => Promise<void>;
+  addSavingsGoal: (title: string, currentPesos: number, targetPesos: number) => Promise<boolean>;
+  updateSavingsAmount: (id: number, currentPesos: number) => Promise<boolean>;
+  updateSavingsGoal: (id: number, updates: Partial<SavingsGoal>) => Promise<boolean>;
+  deleteSavingsGoal: (id: number) => Promise<boolean>;
 
-  addTask: (title: string, description: string, dueDate: string, dueTime: string, priority: 'High' | 'Medium' | 'Low') => Promise<void>;
-  toggleTask: (id: number) => Promise<void>;
-  updateTask: (id: number, updates: Partial<TaskItem>) => Promise<void>;
-  deleteTask: (id: number) => Promise<void>;
+  addTask: (title: string, description: string, dueDate: string, dueTime: string, priority: 'High' | 'Medium' | 'Low') => Promise<boolean>;
+  toggleTask: (id: number) => Promise<boolean>;
+  updateTask: (id: number, updates: Partial<TaskItem>) => Promise<boolean>;
+  deleteTask: (id: number) => Promise<boolean>;
 
-  addEvent: (title: string, date: string, time: string, location: string) => Promise<void>;
-  updateEvent: (id: number, updates: Partial<ScheduleEvent>) => Promise<void>;
-  deleteEvent: (id: number) => Promise<void>;
+  addEvent: (title: string, date: string, time: string, endTime: string, description: string, location: string) => Promise<boolean>;
+  updateEvent: (id: number, updates: Partial<ScheduleEvent>) => Promise<boolean>;
+  deleteEvent: (id: number) => Promise<boolean>;
 
   logActivity: (type: ActivityType, title: string, subtitle: string) => Promise<void>;
 
@@ -137,14 +139,23 @@ interface DayflowState {
   resetTheme: () => Promise<void>;
 
   showToast: (message: string) => void;
+  dismissToast: () => void;
   toastMessage: string;
   toastVisible: boolean;
 
-  loadFromDatabase: () => Promise<void>;
+  loadFromDatabase: (force?: boolean) => Promise<void>;
 }
 
 let isDbReady = false;
 let dbLoadPromise: Promise<void> | null = null;
+
+async function refreshAfterMutation(reload: () => Promise<void>): Promise<void> {
+  try {
+    await reload();
+  } catch (error) {
+    console.error('A database write succeeded but refreshing the view failed:', error);
+  }
+}
 
 export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
   expenses: [],
@@ -193,8 +204,8 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
     set({ modalState: 'closed', modalEditId: null, modalEditType: null });
   },
 
-  loadFromDatabase: async () => {
-    if (isDbReady) return;
+  loadFromDatabase: async (force = false) => {
+    if (isDbReady && !force) return;
     if (dbLoadPromise) return dbLoadPromise;
 
     dbLoadPromise = (async () => {
@@ -208,6 +219,7 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           getAllTasks(),
           getAllScheduleActivities(),
         ]);
+        const activities = await getRecentActivities(50);
 
         const expenseItems: Expense[] = expenses.map((e) => ({
           id: e.id,
@@ -242,25 +254,36 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           title: ev.title,
           date: ev.date,
           time: ev.start_time ?? '',
-          location: ev.end_time ?? '',
+          endTime: ev.end_time ?? '',
+          description: ev.description ?? '',
+          location: ev.location ?? '',
           createdAt: ev.created_at,
         }));
 
         const totalExpenses = expenseItems.reduce((sum, e) => sum + e.amountCentavos, 0);
         const totalSavings = goalItems.reduce((sum, g) => sum + g.currentCentavos, 0);
         const completedTasks = taskItems.filter((t) => t.completed).length;
+        const activityItems: ActivityLogEntry[] = activities.map((activity) => ({
+          id: activity.id,
+          type: activity.type as ActivityType,
+          title: activity.title,
+          subtitle: activity.activity_date ?? '',
+          createdAt: activity.timestamp,
+        }));
 
         set({
           expenses: expenseItems,
           savingsGoals: goalItems,
           tasks: taskItems,
           scheduleEvents: eventItems,
+          activityLog: activityItems,
           totalExpenses,
           totalSavings,
           completedTasks,
         });
         isDbReady = true;
       } catch (error) {
+        isDbReady = false;
         console.error('Failed to load from database:', error);
         throw error;
       } finally {
@@ -273,9 +296,13 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
 
   // Expenses
   addExpense: async (title, amountPesos, category, date) => {
-    if (!title.trim() || !validateAmount(amountPesos)) return;
+    if (!title.trim() || !validateAmount(amountPesos) || !['Food & Drinks', 'Transport', 'Others'].includes(category) || !date) {
+      get().showToast('Unable to save expense. Check your information and try again.');
+      return false;
+    }
     const amountCentavos = Math.round(amountPesos * 100);
     try {
+      await get().loadFromDatabase();
       const created = await createExpense({
         title: title.trim(),
         amount: amountCentavos,
@@ -298,25 +325,33 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast(`Added ₱${(amountPesos / 100).toLocaleString('en-PH')} expense`);
+      await get().logActivity('expense', `Logged expense: ${title.trim()}`, `₱${amountPesos.toLocaleString('en-PH')}`);
+      get().showToast('Expense saved successfully');
+      return true;
     } catch (error) {
       console.error('Failed to add expense:', error);
-      get().showToast('Failed to add expense');
+      get().showToast('Unable to save expense. Check your information and try again.');
+      return false;
     }
   },
 
   updateExpense: async (id, updates) => {
     const state = get();
     const existing = state.expenses.find((e) => e.id === id);
-    if (!existing) return;
-    if (updates.amountCentavos !== undefined && !validateAmount(updates.amountCentavos / 100)) return;
+    if (!existing) return false;
+    if (updates.amountCentavos !== undefined && !validateAmount(updates.amountCentavos / 100)) {
+      get().showToast('Unable to update expense. Check the amount and try again.');
+      return false;
+    }
     try {
-      await updateExpense(id, {
+      await get().loadFromDatabase();
+      const updated = await updateExpense(id, {
         title: updates.title,
         amount: updates.amountCentavos,
         category: updates.category,
         date: updates.date,
       } as any);
+      if (!updated) throw new Error('Expense update did not affect a record');
       const newAmount = updates.amountCentavos ?? existing.amountCentavos;
       set((state) => ({
         expenses: state.expenses.map((e) =>
@@ -328,19 +363,23 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Expense updated');
+      await get().logActivity('expense', `Updated expense: ${updates.title ?? existing.title}`, 'Expense modified');
+      get().showToast('Expense updated successfully');
+      return true;
     } catch (error) {
       console.error('Failed to update expense:', error);
-      get().showToast('Failed to update expense');
+      get().showToast('Unable to update expense. Please try again.');
+      return false;
     }
   },
 
   deleteExpense: async (id) => {
     const state = get();
     const exp = state.expenses.find((e) => e.id === id);
-    if (!exp) return;
+    if (!exp) return false;
     try {
-      await deleteExpense(id);
+      await get().loadFromDatabase();
+      if (!await deleteExpense(id)) throw new Error('Expense delete did not affect a record');
       set((state) => ({
         expenses: state.expenses.filter((e) => e.id !== id),
         totalExpenses: state.totalExpenses - exp.amountCentavos,
@@ -349,16 +388,22 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Expense deleted');
+      await get().logActivity('expense', `Deleted expense: ${exp.title}`, 'Expense removed');
+      get().showToast('Expense deleted successfully');
+      return true;
     } catch (error) {
       console.error('Failed to delete expense:', error);
-      get().showToast('Failed to delete expense');
+      get().showToast('Unable to delete expense. Please try again.');
+      return false;
     }
   },
 
   // Savings
   addSavingsGoal: async (title, currentPesos, targetPesos) => {
-    if (!title.trim() || targetPesos <= 0) return;
+    if (!title.trim() || !Number.isFinite(targetPesos) || targetPesos <= 0 || !Number.isFinite(currentPesos) || currentPesos < 0) {
+      get().showToast('Unable to save savings goal. Check your information and try again.');
+      return false;
+    }
     try {
       await get().loadFromDatabase();
       const created = await createSavingsGoal({
@@ -381,21 +426,25 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast(`Goal "${title.trim()}" created!`);
+      await get().logActivity('savings', `Created goal: ${title.trim()}`, `₱${targetPesos.toLocaleString('en-PH')} target`);
+      get().showToast('Savings goal created successfully');
+      return true;
     } catch (error) {
       console.error('Failed to add savings goal:', error);
-      get().showToast('Failed to create goal');
+      get().showToast('Unable to save savings goal. Please try again.');
+      return false;
     }
   },
 
   updateSavingsAmount: async (id, currentPesos) => {
     const state = get();
     const goal = state.savingsGoals.find((g) => g.id === id);
-    if (!goal) return;
+    if (!goal) return false;
     const newCentavos = Math.round(currentPesos * 100);
     const delta = newCentavos - goal.currentCentavos;
     try {
-      await updateSavingsGoal(id, { current_amount: newCentavos } as any);
+      await get().loadFromDatabase();
+      if (!await updateSavingsGoal(id, { current_amount: newCentavos } as any)) throw new Error('Savings update did not affect a record');
       set((state) => ({
         savingsGoals: state.savingsGoals.map((g) =>
           g.id === id ? { ...g, currentCentavos: newCentavos } : g
@@ -406,23 +455,27 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Goal updated');
+      await get().logActivity('savings', `Updated goal: ${goal.title}`, `₱${currentPesos.toLocaleString('en-PH')} saved`);
+      get().showToast('Savings goal updated successfully');
+      return true;
     } catch (error) {
       console.error('Failed to update savings:', error);
-      get().showToast('Failed to update goal');
+      get().showToast('Unable to update savings goal. Please try again.');
+      return false;
     }
   },
 
   updateSavingsGoal: async (id, updates) => {
     const state = get();
     const existing = state.savingsGoals.find((g) => g.id === id);
-    if (!existing) return;
+    if (!existing) return false;
     try {
-      await updateSavingsGoal(id, {
+      await get().loadFromDatabase();
+      if (!await updateSavingsGoal(id, {
         name: updates.title,
         target_amount: updates.targetCentavos,
         current_amount: updates.currentCentavos,
-      } as any);
+      } as any)) throw new Error('Savings goal update did not affect a record');
       const newCurrent = updates.currentCentavos ?? existing.currentCentavos;
       const newTarget = updates.targetCentavos ?? existing.targetCentavos;
       const delta = newCurrent - existing.currentCentavos;
@@ -436,19 +489,23 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Goal updated');
+      await get().logActivity('savings', `Updated goal: ${updates.title ?? existing.title}`, 'Goal modified');
+      get().showToast('Savings goal updated successfully');
+      return true;
     } catch (error) {
       console.error('Failed to update goal:', error);
-      get().showToast('Failed to update goal');
+      get().showToast('Unable to update savings goal. Please try again.');
+      return false;
     }
   },
 
   deleteSavingsGoal: async (id) => {
     const state = get();
     const goal = state.savingsGoals.find((g) => g.id === id);
-    if (!goal) return;
+    if (!goal) return false;
     try {
-      await deleteSavingsGoal(id);
+      await get().loadFromDatabase();
+      if (!await deleteSavingsGoal(id)) throw new Error('Savings goal delete did not affect a record');
       set((state) => ({
         savingsGoals: state.savingsGoals.filter((g) => g.id !== id),
         totalSavings: state.totalSavings - goal.currentCentavos,
@@ -457,17 +514,24 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Goal deleted');
+      await get().logActivity('savings', `Deleted goal: ${goal.title}`, 'Goal removed');
+      get().showToast('Savings goal deleted successfully');
+      return true;
     } catch (error) {
       console.error('Failed to delete goal:', error);
-      get().showToast('Failed to delete goal');
+      get().showToast('Unable to delete savings goal. Please try again.');
+      return false;
     }
   },
 
   // Tasks
   addTask: async (title, description, dueDate, dueTime, priority) => {
-    if (!title.trim()) return;
+    if (!title.trim() || !dueDate || !dueTime || !['High', 'Medium', 'Low'].includes(priority)) {
+      get().showToast('Unable to save task. Check your information and try again.');
+      return false;
+    }
     try {
+      await get().loadFromDatabase();
       const created = await createTask({
         title: title.trim(),
         description: description.trim(),
@@ -494,20 +558,24 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast(`Task "${title.trim()}" added!`);
+      await get().logActivity('task', `Created task: ${title.trim()}`, `Due: ${dueDate}`);
+      get().showToast('Task saved successfully');
+      return true;
     } catch (error) {
       console.error('Failed to add task:', error);
-      get().showToast('Failed to add task');
+      get().showToast('Unable to save task. Please try again.');
+      return false;
     }
   },
 
   toggleTask: async (id) => {
     const state = get();
     const task = state.tasks.find((t) => t.id === id);
-    if (!task) return;
+    if (!task) return false;
     const completed = !task.completed;
     try {
-      await updateTaskCompletion(id, completed);
+      await get().loadFromDatabase();
+      if (!await updateTaskCompletion(id, completed)) throw new Error('Task completion update did not affect a record');
       set((state) => ({
         tasks: state.tasks.map((t) =>
           t.id === id ? { ...t, completed } : t
@@ -518,25 +586,30 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
+      await get().logActivity('task', completed ? `Completed "${task.title}"` : `Reopened "${task.title}"`, 'Task status changed');
+      get().showToast(completed ? 'Task marked as completed' : 'Task marked as pending');
+      return true;
     } catch (error) {
       console.error('Failed to toggle task:', error);
-      get().showToast('Failed to update task');
+      get().showToast('Unable to update task. Please try again.');
+      return false;
     }
   },
 
   updateTask: async (id, updates) => {
     const state = get();
     const existing = state.tasks.find((t) => t.id === id);
-    if (!existing) return;
+    if (!existing) return false;
     try {
-      await updateTask(id, {
+      await get().loadFromDatabase();
+      if (!await updateTask(id, {
         title: updates.title,
         description: updates.description,
         due_date: updates.dueDate,
         due_time: updates.dueTime,
         priority: updates.priority,
         completed: updates.completed,
-      } as any);
+      } as any)) throw new Error('Task update did not affect a record');
       set((state) => ({
         tasks: state.tasks.map((t) =>
           t.id === id ? { ...t, ...updates } : t
@@ -546,19 +619,23 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Task updated');
+      await get().logActivity('task', `Updated task: ${updates.title ?? existing.title}`, 'Task modified');
+      get().showToast('Task updated successfully');
+      return true;
     } catch (error) {
       console.error('Failed to update task:', error);
-      get().showToast('Failed to update task');
+      get().showToast('Unable to update task. Please try again.');
+      return false;
     }
   },
 
   deleteTask: async (id) => {
     const state = get();
     const task = state.tasks.find((t) => t.id === id);
-    if (!task) return;
+    if (!task) return false;
     try {
-      await deleteTask(id);
+      await get().loadFromDatabase();
+      if (!await deleteTask(id)) throw new Error('Task delete did not affect a record');
       set((state) => ({
         tasks: state.tasks.filter((t) => t.id !== id),
         completedTasks: state.completedTasks - (task.completed ? 1 : 0),
@@ -567,21 +644,30 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Task deleted');
+      await get().logActivity('task', `Deleted task: ${task.title}`, 'Task removed');
+      get().showToast('Task deleted successfully');
+      return true;
     } catch (error) {
       console.error('Failed to delete task:', error);
-      get().showToast('Failed to delete task');
+      get().showToast('Unable to delete task. Please try again.');
+      return false;
     }
   },
 
   // Schedule
-  addEvent: async (title, date, time, location) => {
-    if (!title.trim()) return;
+  addEvent: async (title, date, time, endTime, description, location) => {
+    if (!title.trim() || !date || !time) {
+      get().showToast('Unable to save event. Check your information and try again.');
+      return false;
+    }
     try {
+      await get().loadFromDatabase();
       const created = await createScheduleActivity({
         title: title.trim(),
         start_time: time,
-        end_time: location,
+        end_time: endTime || undefined,
+        description: description.trim() || undefined,
+        location: location.trim() || undefined,
         date,
       } as any);
       const event: ScheduleEvent = {
@@ -589,7 +675,9 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
         title: created.title,
         date: created.date,
         time: created.start_time ?? '',
-        location: created.end_time ?? '',
+        endTime: created.end_time ?? '',
+        description: created.description ?? '',
+        location: created.location ?? '',
         createdAt: created.created_at,
       };
       set((state) => ({
@@ -599,24 +687,30 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast(`Scheduled "${title.trim()}"`);
+      await get().logActivity('schedule', `Scheduled: ${title.trim()}`, `${date} ${time}`);
+      get().showToast('Event saved successfully');
+      return true;
     } catch (error) {
       console.error('Failed to add event:', error);
-      get().showToast('Failed to add event');
+      get().showToast('Unable to save event. Please try again.');
+      return false;
     }
   },
 
   updateEvent: async (id, updates) => {
     const state = get();
     const existing = state.scheduleEvents.find((e) => e.id === id);
-    if (!existing) return;
+    if (!existing) return false;
     try {
-      await updateScheduleActivity(id, {
+      await get().loadFromDatabase();
+      if (!await updateScheduleActivity(id, {
         title: updates.title,
         start_time: updates.time,
-        end_time: updates.location,
+        end_time: updates.endTime,
+        description: updates.description,
+        location: updates.location,
         date: updates.date,
-      } as any);
+      } as any)) throw new Error('Event update did not affect a record');
       set((state) => ({
         scheduleEvents: state.scheduleEvents.map((e) =>
           e.id === id ? { ...e, ...updates } : e
@@ -626,19 +720,23 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Event updated');
+      await get().logActivity('schedule', `Updated event: ${updates.title ?? existing.title}`, 'Event modified');
+      get().showToast('Event updated successfully');
+      return true;
     } catch (error) {
       console.error('Failed to update event:', error);
-      get().showToast('Failed to update event');
+      get().showToast('Unable to update event. Please try again.');
+      return false;
     }
   },
 
   deleteEvent: async (id) => {
     const state = get();
     const event = state.scheduleEvents.find((e) => e.id === id);
-    if (!event) return;
+    if (!event) return false;
     try {
-      await deleteScheduleActivity(id);
+      await get().loadFromDatabase();
+      if (!await deleteScheduleActivity(id)) throw new Error('Event delete did not affect a record');
       set((state) => ({
         scheduleEvents: state.scheduleEvents.filter((e) => e.id !== id),
         activityLog: [
@@ -646,28 +744,42 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
           ...state.activityLog,
         ].slice(0, 50),
       }));
-      get().showToast('Event deleted');
+      await get().logActivity('schedule', `Deleted event: ${event.title}`, 'Event removed');
+      get().showToast('Event deleted successfully');
+      return true;
     } catch (error) {
       console.error('Failed to delete event:', error);
-      get().showToast('Failed to delete event');
+      get().showToast('Unable to delete event. Please try again.');
+      return false;
     }
   },
 
   // Activity log
   logActivity: async (type, title, subtitle) => {
     try {
-      await recordActivity({
+      const saved = await recordActivity({
         type,
         title,
         related_id: undefined,
         activity_date: new Date().toISOString().split('T')[0],
       } as any);
-      set((state) => ({
-        activityLog: [
-          makeLogEntry(type, title, subtitle),
-          ...state.activityLog,
-        ].slice(0, 50),
-      }));
+      const activity: ActivityLogEntry = {
+        id: saved.id,
+        type,
+        title,
+        subtitle,
+        createdAt: saved.timestamp,
+      };
+      set((state) => {
+        const localIndex = state.activityLog.findIndex((entry) =>
+          entry.type === type && entry.title === title && Math.abs(Date.now() - new Date(entry.createdAt).getTime()) < 5000
+        );
+        if (localIndex < 0) return { activityLog: [activity, ...state.activityLog].slice(0, 50) };
+        const updated = [...state.activityLog];
+        updated[localIndex] = activity;
+        return { activityLog: updated };
+      });
+      await refreshAfterMutation(() => get().loadFromDatabase(true));
     } catch (error) {
       console.error('Failed to log activity:', error);
     }
@@ -722,10 +834,8 @@ export const useDayflowStore = create<DayflowState>()(persist((set, get) => ({
 
   showToast: (message: string) => {
     set({ toastMessage: message, toastVisible: true });
-    setTimeout(() => {
-      set({ toastVisible: false });
-    }, 2200);
   },
+  dismissToast: () => set({ toastVisible: false }),
 }), {
   name: 'dayflow-ui-preferences',
   partialize: (state) => ({

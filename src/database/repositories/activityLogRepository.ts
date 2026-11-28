@@ -2,13 +2,19 @@ import { executeQuery } from "../connection";
 import { ActivityLog } from "../models";
 
 export async function recordActivity(entry: Omit<ActivityLog, "id" | "created_at">): Promise<ActivityLog> {
-  const result: any = await executeQuery({
-    query: "INSERT INTO activity_log (type, title, timestamp, related_id, activity_date, created_at) VALUES (?, ?, datetime('now'), ?, date('now')) RETURNING *",
-    params: [entry.type, entry.title, entry.related_id, entry.activity_date],
+  const result = await executeQuery({
+    query: "INSERT INTO activity_log (type, title, timestamp, related_id, activity_date, created_at) VALUES (?, ?, datetime('now'), ?, ?, datetime('now'))",
+    params: [entry.type, entry.title, entry.related_id ?? null, entry.activity_date ?? new Date().toISOString().slice(0, 10)],
   });
-  const r = result?.results;
-  return r ? (r[0] as ActivityLog) : { id: 0, type: "expense", title: "", timestamp: "", related_id: 0, activity_date: "", created_at: "" } as ActivityLog;
-};
+  if (!result.lastId || !result.changes) throw new Error("Activity insert was not confirmed");
+  const selected = await executeQuery({
+    query: "SELECT id, type, title, timestamp, related_id, activity_date, created_at FROM activity_log WHERE id = ?",
+    params: [result.lastId],
+  });
+  const created = selected.results?.[0] as ActivityLog | undefined;
+  if (!created) throw new Error("Inserted activity could not be read back");
+  return created;
+}
 
 export async function getRecentActivities(limit: number = 10): Promise<ActivityLog[]> {
   const result: any = await executeQuery({

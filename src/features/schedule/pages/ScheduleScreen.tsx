@@ -24,7 +24,6 @@ export default function ScheduleScreen() {
     scheduleEvents,
     deleteEvent,
     deleteTask,
-    showToast,
     openModal,
     tasks,
     toggleTask,
@@ -86,7 +85,6 @@ export default function ScheduleScreen() {
 
   const handleDelete = async (id: number) => {
     await deleteEvent(id);
-    await showToast('Event deleted');
   };
 
   const handleToggleTask = async (id: number) => {
@@ -176,8 +174,11 @@ export default function ScheduleScreen() {
             <div className="absolute left-3 top-1 bottom-1 w-[1px] bg-[#E2DAF8]" />
             {agendaItems.map((item) => {
               const isTask = item.type === 'task';
-              const time = isTask ? (item.dueTime ?? '') : (item.time ?? '');
+              const time = isTask
+                ? (item.dueTime ?? '')
+                : [item.time, item.endTime].filter(Boolean).join('–');
               const location = isTask ? '' : (item.location ?? '');
+              const description = isTask ? (item.description ?? '') : (item.description ?? '');
               return (
                 <div key={`${item.type}-${item.id}`} className="relative pl-8 mb-4">
                   <span
@@ -206,6 +207,7 @@ export default function ScheduleScreen() {
                           {location}
                         </div>
                       )}
+                      {description && <div className="text-[11px] leading-relaxed text-ink-500 mt-1">{description}</div>}
                       {isTask && (
                         <div className="flex items-center gap-1.5 text-[12px] text-ink-500 mt-1">
                           <span>

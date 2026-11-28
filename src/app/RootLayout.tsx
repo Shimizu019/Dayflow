@@ -10,7 +10,7 @@ export default function RootLayout() {
   const toastMessage = useDayflowStore((state) => state.toastMessage);
   const toastVisible = useDayflowStore((state) => state.toastVisible);
   const openModal = useDayflowStore((state) => state.openModal);
-  const closeModal = useDayflowStore((state) => state.closeModal);
+  const dismissToast = useDayflowStore((state) => state.dismissToast);
 
   return (
     <div className="h-[100dvh] min-h-0 bg-[#F8F7FC] flex flex-col w-full overflow-hidden">
@@ -38,7 +38,7 @@ export default function RootLayout() {
       <Toast
         message={toastMessage}
         visible={toastVisible}
-        onDismiss={closeModal}
+        onDismiss={dismissToast}
       />
     </div>
   );

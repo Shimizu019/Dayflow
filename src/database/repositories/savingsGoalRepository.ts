@@ -21,13 +21,15 @@ export async function getSavingsGoalById(id: number): Promise<SavingsGoal | unde
 };
 
 export async function createSavingsGoal(goal: Omit<SavingsGoal, "id" | "created_at" | "updated_at">): Promise<SavingsGoal> {
-  const result: any = await executeQuery({
-    query: "INSERT INTO savings_goals (name, target_amount, current_amount, target_date, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING *",
-    params: [goal.name, goal.target_amount, goal.current_amount, goal.target_date],
+  const result = await executeQuery({
+    query: "INSERT INTO savings_goals (name, target_amount, current_amount, target_date, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
+    params: [goal.name, goal.target_amount, goal.current_amount, goal.target_date ?? null],
   });
-  const r = result?.results;
-  return r ? (r[0] as SavingsGoal) : { id: 0, name: "", target_amount: 0, current_amount: 0, target_date: "", created_at: "", updated_at: "" } as SavingsGoal;
-};
+  if (!result.lastId || !result.changes) throw new Error("Savings goal insert was not confirmed");
+  const created = await getSavingsGoalById(result.lastId);
+  if (!created) throw new Error("Inserted savings goal could not be read back");
+  return created;
+}
 
 export async function updateSavingsGoal(id: number, updates: Partial<SavingsGoal>): Promise<boolean> {
   const sets: string[] = [];

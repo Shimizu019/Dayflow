@@ -1,7 +1,7 @@
 import { CapacitorSQLite } from "@capacitor-community/sqlite";
 import { transaction } from "./connection";
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const DB_NAME = "dayflow_db";
 
 const MIGRATION_SCHEMA = {
@@ -48,6 +48,8 @@ const MIGRATION_SCHEMA = {
         title TEXT NOT NULL,
         start_time TEXT,
         end_time TEXT,
+        description TEXT,
+        location TEXT,
         date TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -82,6 +84,7 @@ export async function initializeDatabase(): Promise<void> {
       const version = await getDbVersion();
       if (version === 0) {
         await createInitialSchema();
+        await ensureCurrentColumns();
       } else if (version < DATABASE_VERSION) {
         await runMigrations(version);
       }
@@ -101,30 +104,50 @@ async function getDbVersion(): Promise<number> {
     const result = await CapacitorSQLite.query({
       database: DB_NAME,
       statement: "PRAGMA user_version;",
+      values: [],
     });
     const version = result.values?.[0]?.user_version ?? 0;
     return Number.parseInt(String(version), 10) || 0;
-  } catch {
-    return 0;
+  } catch (error) {
+    console.error("Unable to read SQLite schema version", error);
+    throw error;
   }
 }
 
 async function runMigrations(fromVersion: number): Promise<void> {
-  const migrationQueries: Array<{ query: string; params: any[] }> = [];
-
-  if (fromVersion < 2) {
-    migrationQueries.push({
-      query: "ALTER TABLE tasks ADD COLUMN due_time TEXT",
-      params: [],
-    });
-  }
-
-  await transaction(migrationQueries);
+  await ensureCurrentColumns(fromVersion);
 
   await CapacitorSQLite.run({
     database: DB_NAME,
     statement: `PRAGMA user_version = ${DATABASE_VERSION}`,
+    values: [],
   });
+}
+
+async function ensureCurrentColumns(_fromVersion = 0): Promise<void> {
+  const additions: Array<{ table: string; column: string; definition: string }> = [
+    { table: "tasks", column: "due_time", definition: "TEXT" },
+    { table: "schedule_activities", column: "description", definition: "TEXT" },
+    { table: "schedule_activities", column: "location", definition: "TEXT" },
+  ];
+  const queries: Array<{ query: string; params: any[] }> = [];
+
+  for (const addition of additions) {
+    const info = await CapacitorSQLite.query({
+      database: DB_NAME,
+      statement: `PRAGMA table_info(${addition.table})`,
+      values: [],
+    });
+    const columns = (info.values ?? []) as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === addition.column)) {
+      queries.push({
+        query: `ALTER TABLE ${addition.table} ADD COLUMN ${addition.column} ${addition.definition}`,
+        params: [],
+      });
+    }
+  }
+
+  if (queries.length) await transaction(queries);
 }
 
 async function createInitialSchema(): Promise<void> {
@@ -140,6 +163,7 @@ async function createInitialSchema(): Promise<void> {
   await CapacitorSQLite.run({
     database: DB_NAME,
     statement: `PRAGMA user_version = ${DATABASE_VERSION}`,
+    values: [],
   });
 
   console.log(`Initial schema created, version: ${DATABASE_VERSION}`);

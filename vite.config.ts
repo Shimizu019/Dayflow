@@ -25,6 +25,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    target: 'chrome80',
   },
   server: {
     port: 3000,

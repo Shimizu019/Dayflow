@@ -7,6 +7,7 @@ import router from './router';
 const App: React.FC = () => {
   const theme = useDayflowStore((state) => state.theme);
   const loadFromDatabase = useDayflowStore((state) => state.loadFromDatabase);
+  const showToast = useDayflowStore((state) => state.showToast);
 
   useEffect(() => {
     if (theme.mode === 'dark') {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
         await loadFromDatabase();
       } catch (error) {
         console.error('Initialization failed:', error);
+        showToast('Database initialization failed. Please restart the application.');
       } finally {
         if (mounted) {
           // dbReady is no longer used; App always renders
@@ -42,7 +44,7 @@ const App: React.FC = () => {
     };
     initDb();
     return () => { mounted = false; };
-  }, [loadFromDatabase]);
+  }, [loadFromDatabase, showToast]);
 
   return (
     <>

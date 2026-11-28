@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
     CapacitorSQLite: {
       databaseName: 'dayflow_db',
       version: 1,
-      encrypted: true,
+      encrypted: false,
       mode: 'no-encryption',
       overrideUserDefault: true,
     },

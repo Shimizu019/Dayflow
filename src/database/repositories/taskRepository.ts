@@ -21,13 +21,15 @@ export async function getTaskById(id: number): Promise<Task | undefined> {
 };
 
 export async function createTask(task: Omit<Task, "id" | "created_at" | "updated_at">): Promise<Task> {
-  const result: any = await executeQuery({
-    query: "INSERT INTO tasks (title, description, due_date, due_time, priority, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING *",
-    params: [task.title, task.description, task.due_date, task.due_time, task.priority, task.completed],
+  const result = await executeQuery({
+    query: "INSERT INTO tasks (title, description, due_date, due_time, priority, completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+    params: [task.title, task.description ?? null, task.due_date ?? null, task.due_time ?? null, task.priority, task.completed ? 1 : 0],
   });
-  const r = result?.results;
-  return r ? (r[0] as Task) : { id: 0, title: "", description: "", due_date: "", due_time: "", priority: "Medium", completed: false, created_at: "", updated_at: "" } as Task;
-};
+  if (!result.lastId || !result.changes) throw new Error("Task insert was not confirmed");
+  const created = await getTaskById(result.lastId);
+  if (!created) throw new Error("Inserted task could not be read back");
+  return created;
+}
 
 export async function updateTask(id: number, updates: Partial<Task>): Promise<boolean> {
   const sets: string[] = [];
